@@ -132,6 +132,56 @@ class getid3_writetags
 	public function __construct() {
 	}
 
+
+    /**
+     * @param array $fileInfo
+     * @return array|bool
+     */
+	public function GetAllowedTagFormats(array $fileInfo) {
+        // check for what file types are allowed on this fileformat
+        switch (isset($fileInfo['fileformat']) ? $fileInfo['fileformat'] : '') {
+            case 'mp3':
+            case 'mp2':
+            case 'mp1':
+            case 'riff': // maybe not officially, but people do it anyway
+                return array('id3v1', 'id3v2.2', 'id3v2.3', 'id3v2.4', 'ape', 'lyrics3');
+                break;
+
+            case 'mpc':
+                return array('ape');
+                break;
+
+            case 'flac':
+                return array('metaflac');
+                break;
+
+            case 'real':
+                return array('real');
+                break;
+
+            case 'ogg':
+                switch (isset($fileInfo['audio']['dataformat']) ? $fileInfo['audio']['dataformat'] : '') {
+                    case 'flac':
+                        //return array('metaflac');
+                        $this->errors[] = 'metaflac is not (yet) compatible with OggFLAC files';
+                        return false;
+                        break;
+                    case 'vorbis':
+                        return array('vorbiscomment');
+                        break;
+                    default:
+                        $this->errors[] = 'metaflac is not (yet) compatible with Ogg files other than OggVorbis';
+                        return false;
+                        break;
+                }
+                break;
+
+            default:
+                return array();
+                break;
+        }
+    }
+
 	/**
 	 * @return bool
 	 */
@@ -151,13 +201,13 @@ class getid3_writetags
 		}
 
 		$TagFormatsToRemove = array();
-		$AllowedTagFormats = array();
+
 		if (filesize($this->filename) == 0) {
 
 			// empty file special case - allow any tag format, don't check existing format
 			// could be useful if you want to generate tag data for a non-existant file
 			$this->ThisFileInfo = array('fileformat'=>'');
-			$AllowedTagFormats = array('id3v1', 'id3v2.2', 'id3v2.3', 'id3v2.4', 'ape', 'lyrics3');
+            $this->tagformats = array('id3v1', 'id3v2.2', 'id3v2.3', 'id3v2.4', 'ape', 'lyrics3');
 
 		} else {
 
@@ -165,48 +215,11 @@ class getid3_writetags
 			$getID3->encoding = $this->tag_encoding;
 			$this->ThisFileInfo = $getID3->analyze($this->filename);
 
-			// check for what file types are allowed on this fileformat
-			switch (isset($this->ThisFileInfo['fileformat']) ? $this->ThisFileInfo['fileformat'] : '') {
-				case 'mp3':
-				case 'mp2':
-				case 'mp1':
-				case 'riff': // maybe not officially, but people do it anyway
-					$AllowedTagFormats = array('id3v1', 'id3v2.2', 'id3v2.3', 'id3v2.4', 'ape', 'lyrics3');
-					break;
+            $AllowedTagFormats = $this->GetAllowedTagFormats($this->ThisFileInfo);
+            if (false === $AllowedTagFormats) {
+                return false;
+            }
 
-				case 'mpc':
-					$AllowedTagFormats = array('ape');
-					break;
-
-				case 'flac':
-					$AllowedTagFormats = array('metaflac');
-					break;
-
-				case 'real':
-					$AllowedTagFormats = array('real');
-					break;
-
-				case 'ogg':
-					switch (isset($this->ThisFileInfo['audio']['dataformat']) ? $this->ThisFileInfo['audio']['dataformat'] : '') {
-						case 'flac':
-							//$AllowedTagFormats = array('metaflac');
-							$this->errors[] = 'metaflac is not (yet) compatible with OggFLAC files';
-							return false;
-							break;
-						case 'vorbis':
-							$AllowedTagFormats = array('vorbiscomment');
-							break;
-						default:
-							$this->errors[] = 'metaflac is not (yet) compatible with Ogg files other than OggVorbis';
-							return false;
-							break;
-					}
-					break;
-
-				default:
-					$AllowedTagFormats = array();
-					break;
-			}
 			foreach ($this->tagformats as $requested_tag_format) {
 				if (!in_array($requested_tag_format, $AllowedTagFormats)) {
 					$errormessage = 'Tag format "'.$requested_tag_format.'" is not allowed on "'.(isset($this->ThisFileInfo['fileformat']) ? $this->ThisFileInfo['fileformat'] : '');
